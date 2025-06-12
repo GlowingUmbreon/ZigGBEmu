@@ -4,6 +4,7 @@ const lib = @import("ZigGBEmu_lib");
 const rom = @import("rom.zig");
 const cpu = @import("cpu.zig");
 const io = @import("io.zig");
+const ppu = @import("ppu.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -15,7 +16,8 @@ pub fn main() !void {
     const test_file = try cwd.openFile("./tools/BlarggTestRomsLogs/EpicLog.txt", .{ .mode = .read_only });
     const reader = test_file.reader();
     while (true) {
-        try cpu.step(reader);
+        const cycles = try cpu.step(reader);
+        try ppu.step(cycles);
 
         if (cpu.ime_enabled) {
             if (io.interrupt_enable.v_blank and io.interrupt_flag.v_blank) {

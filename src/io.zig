@@ -65,7 +65,7 @@ pub fn read(address: u32) u8 {
             0xFF26 => audio.NR52,
             0xFF27...0xFF2F => unreachable,
             0xFF40 => ppu.lcd_control,
-            0xFF44 => 0x90, //ppu.lcd_y_cord,
+            0xFF44 => ppu.ly,
             else => unreachable,
         },
         0xFF80...0xFFFE => high_ram[address - 0xFF80], // High RAM
@@ -140,12 +140,17 @@ pub fn write(address: u32, value: u8) void {
 
             // Graphics
             0xFF40 => ppu.lcd_control = @bitCast(value),
-            0xFF41 => ppu.lcd_status = @bitCast(value),
+            0xFF41 => ppu.stat = @bitCast(value),
             0xFF42 => ppu.scy = value,
             0xFF43 => ppu.scx = value,
             0xFF44 => ppu.ly = value,
             0xFF45 => ppu.lyc = value,
-            0xFF46 => unreachable, // TODO: IMPLEMENT THIS
+            0xFF46 => {
+                const source = @as(u16, @intCast(value)) * 0x100;
+                for (0..0x9F) |offset| {
+                    ppu.oam[offset] = read(source + @as(u16, @intCast(offset)));
+                }
+            },
             0xFF47 => ppu.bg_palette_data = value,
             0xFF48 => ppu.obj0_palette_data = value,
             0xFF49 => ppu.obj1_palette_data = value,

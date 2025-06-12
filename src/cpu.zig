@@ -37,7 +37,8 @@ pub fn set_flags(z: ?bool, n: ?bool, h: ?bool, c: ?bool) void {
     if (c) |v| registers.flags.c = v;
 }
 
-pub fn step(reader: std.fs.File.Reader) !void {
+pub fn step(reader: std.fs.File.Reader) !u8 {
+    const cycles: u8 = 1; // TODO: Set a sane default
     const opcode = io.read(registers.u16.pc);
 
     if (registers.u16.pc != 0x000) { // Debug
@@ -483,6 +484,7 @@ pub fn step(reader: std.fs.File.Reader) !void {
         else => std.debug.panic("Unimplemented opcode 0x{x}", .{opcode}),
     }
     registers.flags._ = 0;
+    return cycles;
 }
 
 // Carry maths
