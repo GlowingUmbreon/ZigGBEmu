@@ -1,6 +1,5 @@
 const std = @import("std");
 const io = @import("io.zig");
-const opcodes = @import("cpu_opcodes.zig");
 
 pub var ime_enabled = false;
 pub var registers: packed union {
@@ -23,7 +22,7 @@ pub var registers: packed union {
         h: u8,
     },
     flags: packed struct { // Flags
-        _: u4,
+        _: u4, // Always 0
         c: bool, // Carry
         h: bool, // Half-Carry
         n: bool, // Subtraction
@@ -41,7 +40,7 @@ pub fn set_flags(z: ?bool, n: ?bool, h: ?bool, c: ?bool) void {
 pub fn step(reader: std.fs.File.Reader) !void {
     const opcode = io.read(registers.u16.pc);
 
-    if (registers.u16.pc != 0x0100) { // Debug
+    if (registers.u16.pc != 0x000) { // Debug
         std.log.debug("A: {X:0>2} F: {X:0>2} B: {X:0>2} C: {X:0>2} D: {X:0>2} E: {X:0>2} H: {X:0>2} L: {X:0>2} SP: {X:0>4} PC: {X:0>2}:{X:0>4} ({X:0>2} {X:0>2} {X:0>2} {X:0>2})", .{ registers.u8.a, registers.u8.f, registers.u8.b, registers.u8.c, registers.u8.d, registers.u8.e, registers.u8.h, registers.u8.l, registers.u16.sp, 0x00, registers.u16.pc, io.read(registers.u16.pc), io.read(registers.u16.pc + 1), io.read(registers.u16.pc + 2), io.read(registers.u16.pc + 3) });
         var buffer: [83]u8 = undefined;
         var buffer2: [83]u8 = undefined;
@@ -51,9 +50,6 @@ pub fn step(reader: std.fs.File.Reader) !void {
             std.log.err("{s} was expected", .{buffer});
         }
     }
-    //std.log.debug("x 0x{x:0>4} = 0b{b:0>8}", .{ registers.u16.pc, opcode });
-    //std.log.debug(
-    //std.log.err("{s}", .{});
     registers.u16.pc += 1;
     switch (opcode) {
         // Block 0 //
@@ -184,6 +180,8 @@ pub fn step(reader: std.fs.File.Reader) !void {
                 }
                 registers.u8.a +%= adjustment;
             }
+            registers.flags.h = false;
+            registers.flags.z = registers.u8.a == 0;
         },
         // cpl
         // scf
@@ -280,7 +278,7 @@ pub fn step(reader: std.fs.File.Reader) !void {
         inline 0b10111000...0b10111111 => |v| {
             const r8 = read_r8(v, 0);
             const result, const carry = @subWithOverflow(registers.u8.a, r8.get());
-            _, const half_carry = @subWithOverflow(@as(u4, @truncate(registers.u8.a)), r8.get());
+            _, const half_carry = @subWithOverflow(registers.u8.a % 0x10, r8.get() % 0x10);
 
             set_flags(result == 0, true, half_carry == 1, carry == 1);
         },
@@ -343,7 +341,12 @@ pub fn step(reader: std.fs.File.Reader) !void {
             registers.u16.pc = pop_stack16();
         },
         // reti
-        // jp cond, imm16
+        // jp cond, imm16 - 110xx010
+        inline 0b11000010, 0b11001010, 0b11010010, 0b11011010 => |v| {
+            const imm16: u16 = read_imm16(true);
+            const condition = read_condition(v, 3);
+            if (condition.check()) registers.u16.pc = imm16;
+        },
         // jp imm16 - 11000011
         inline 0b11000011 => {
             const imm16: u16 = read_imm16(true);
@@ -370,7 +373,7 @@ pub fn step(reader: std.fs.File.Reader) !void {
         },
         // rst tgt3
         //
-        // //pop r16stk - 11xx0001
+        // pop r16stk - 11xx0001
         inline 0b11000001, 0b11010001, 0b11100001, 0b11110001 => |v| {
             const r16 = read_r16_stk(v, 4);
             r16.set(pop_stack16());
@@ -479,6 +482,7 @@ pub fn step(reader: std.fs.File.Reader) !void {
         0xD3, 0xDB, 0xDD, 0xE3, 0xE4, 0xEB, 0xEC, 0xED, 0xF4, 0xFC, 0xFD => std.debug.panic("Invalid Opcode 0x{x}", .{opcode}),
         else => std.debug.panic("Unimplemented opcode 0x{x}", .{opcode}),
     }
+    registers.flags._ = 0;
 }
 
 // Carry maths

@@ -9,11 +9,10 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    try rom.load_rom(allocator);
+    try rom.load_rom(allocator, "./tools/BlarggTestRoms/02-interrupts.gb");
 
-    //std.log.info("{any}", .{rom.header});
     const cwd = std.fs.cwd();
-    const test_file = try cwd.openFile("./aaa/EpicLog.txt", .{ .mode = .read_only });
+    const test_file = try cwd.openFile("./tools/BlarggTestRomsLogs/EpicLog.txt", .{ .mode = .read_only });
     const reader = test_file.reader();
     while (true) {
         try cpu.step(reader);

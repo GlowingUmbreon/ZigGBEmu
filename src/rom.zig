@@ -78,9 +78,9 @@ pub const Header = extern struct {
 pub var rom: [*]u8 = undefined;
 pub var header: *Header = undefined;
 
-pub fn load_rom(allocator: std.mem.Allocator) !void {
+pub fn load_rom(allocator: std.mem.Allocator, file_path: []const u8) !void {
     const cwd = std.fs.cwd();
-    const file = try cwd.openFile("./06-ld r,r.gb", .{ .mode = .read_only });
+    const file = try cwd.openFile(file_path, .{ .mode = .read_only });
     const file_reader = file.reader();
     const bytes = try file_reader.readAllAlloc(allocator, 0x800000);
     rom = bytes.ptr;
