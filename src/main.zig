@@ -9,11 +9,10 @@ const ppu = @import("ppu.zig");
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-
-    try rom.load_rom(allocator, "./tools/BlarggTestRoms/04-op r,imm.gb");
+    try rom.load_rom(allocator, "./tools/BlarggTestRoms/11-op a,(hl).gb");
 
     const cwd = std.fs.cwd();
-    const test_file = try cwd.openFile("./tools/BlarggTestRomsLogs/EpicLog.txt", .{ .mode = .read_only });
+    const test_file = try cwd.openFile("./tools/BlarggTestRomsLogs/Blargg10.txt", .{ .mode = .read_only });
     const reader = test_file.reader();
     while (true) {
         const cycles = try cpu.step(reader);

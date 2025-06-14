@@ -23,14 +23,14 @@ var tima: u8 = undefined;
 var tma: u8 = undefined;
 var tac: u8 = undefined;
 
-var sb_buffer: [0x100]u8 = undefined;
+var sb_buffer: [0x256]u8 = undefined;
 var sb_buffer_len: u32 = 0;
 
-pub fn read(address: u32) u8 {
+pub fn read(address: u16) u8 {
     return read1(address, false);
 }
 
-pub fn read1(address: u32, no_log: bool) u8 {
+pub fn read1(address: u16, no_log: bool) u8 {
     //std.log.debug("r 0x{x:0>4}", .{address});
     const value: u8 = switch (address) {
         0x0000...0x3FFF => rom.rom[address], // ROM bank 00
@@ -74,18 +74,17 @@ pub fn read1(address: u32, no_log: bool) u8 {
         },
         0xFF80...0xFFFE => high_ram[address - 0xFF80], // High RAM
         0xFFFF => @bitCast(interrupt_enable), // Interrupt Enable register
-        else => unreachable,
     };
     _ = no_log;
     //if (!no_log) std.log.debug("r 0x{x:0>4} = 0x{x:0>2}", .{ address, value });
     return value;
 }
 
-pub fn read16(address: u32) u16 {
+pub fn read16(address: u16) u16 {
     return read(address) | (@as(u16, @intCast(read(address + 1))) << 8);
 }
 
-pub fn write(address: u32, value: u8) void {
+pub fn write(address: u16, value: u8) void {
     //std.log.debug("w 0x{x:0>4} = 0x{x:0>2}", .{ address, value });
     switch (address) {
         0x0000...0x3FFF => undefined, // ROM bank 00
@@ -174,10 +173,9 @@ pub fn write(address: u32, value: u8) void {
         },
         0xFF80...0xFFFE => high_ram[address - 0xFF80] = value, // High RAM
         0xFFFF => interrupt_enable = @bitCast(value), // Interrupt Enable register
-        else => unreachable,
     }
 }
-pub fn write_16(address: u32, value: u32) void {
+pub fn write_16(address: u16, value: u16) void {
     write(address, @truncate(value));
     write(address + 1, @truncate(value >> 8));
     //read(address) | (@as(u16, @intCast(read(address + 1))) << 8);
