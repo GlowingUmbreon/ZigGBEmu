@@ -9,19 +9,18 @@ const ppu = @import("ppu.zig");
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-    try rom.load_rom(allocator, "./tools/BlarggTestRoms/11-op a,(hl).gb");
+    try rom.load_rom(allocator, "./tools/BlarggTestRoms/02-interrupts.gb");
+    //if (rom.header.cartridge_type != .rom_only) std.debug.panic("cartridge_type is {any}", .{rom.header.cartridge_type});
 
-    const cwd = std.fs.cwd();
-    const test_file = try cwd.openFile("./tools/BlarggTestRomsLogs/Blargg10.txt", .{ .mode = .read_only });
-    const reader = test_file.reader();
     while (true) {
-        const cycles = try cpu.step(reader);
+        const cycles = try cpu.step();
         _ = cycles;
         //try ppu.step(cycles);
 
         if (cpu.ime_enabled) {
+            std.log.info("IME ENABLED", .{});
             if (io.interrupt_enable.v_blank and io.interrupt_flag.v_blank) {
-                //std.log.warn("INTERUPT!", .{});
+                std.log.warn("INTERUPT!", .{});
                 cpu.ime_enabled = false;
                 cpu.registers.u16.pc = 0x00;
             }

@@ -25,6 +25,6 @@ Made for `zig 0.15.0-dev.79`, seems some higher versions break some bit shifts w
 | 06-ld r,r.gb             | ✅ pass |
 | 07-jr,jp,call,ret,rst.gb | ✅ pass |
 | 08-misc instrs.gb        | ✅ pass |
-| 09-op r,r.gb             | fail ❎ |
+| 09-op r,r.gb             | ✅ pass |
 | 10-bit ops.gb            | ✅ pass |
-| 11-op a,(hl).gb          | fail ❎ |
+| 11-op a,(hl).gb          | ✅ pass |

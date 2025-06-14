@@ -42,8 +42,8 @@ pub fn shift(number: u8, dir: Direction) struct { u8, bool } {
         return .{ value.number, value.carry };
     }
 }
-pub fn shift_keep_bit(number: u8, carry: bool, dir: Direction) struct { u8, bool } {
-    const n, const c = shift(number, carry, dir);
+pub fn shift_keep_bit(number: u8, dir: Direction) struct { u8, bool } {
+    const n, const c = shift(number, dir);
     if (dir == .right) {
         return .{ n ^ (number & 0b10000000), c };
     } else {
@@ -53,10 +53,10 @@ pub fn shift_keep_bit(number: u8, carry: bool, dir: Direction) struct { u8, bool
 pub fn rotate(number: u8, dir: Direction) struct { u8, bool } {
     if (dir == .right) {
         const value = std.math.rotr(u8, number, 1);
-        return .{ value, (value & 0b00000001) != 0 };
+        return .{ value, (value & 0b10000000) != 0 };
     } else {
         const value = std.math.rotl(u8, number, 1);
-        return .{ value, (value & 0b10000000) != 0 };
+        return .{ value, (value & 0b00000001) != 0 };
     }
 }
 pub fn rotate_through(number: u8, carry: bool, dir: Direction) struct { u8, bool } {

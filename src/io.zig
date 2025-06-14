@@ -3,6 +3,16 @@ const rom = @import("rom.zig");
 const ppu = @import("ppu.zig");
 const audio = @import("audio.zig");
 
+pub const MBC = struct {
+    read: fn (u16) u8,
+    write: fn (u16, u8) void,
+};
+pub const mbcs = [_]MBC{
+    @import("mbc/none.zig").mbc,
+    @import("mbc/mbc1.zig").mbc,
+};
+pub const current_mbc: MBC = mbcs[1];
+
 const Interrupts = packed struct(u8) {
     v_blank: bool = false,
     lcd: bool = false,
@@ -23,7 +33,7 @@ var tima: u8 = undefined;
 var tma: u8 = undefined;
 var tac: u8 = undefined;
 
-var sb_buffer: [0x256]u8 = undefined;
+var sb_buffer: [0x2048]u8 = undefined;
 var sb_buffer_len: u32 = 0;
 
 pub fn read(address: u16) u8 {
@@ -33,17 +43,17 @@ pub fn read(address: u16) u8 {
 pub fn read1(address: u16, no_log: bool) u8 {
     //std.log.debug("r 0x{x:0>4}", .{address});
     const value: u8 = switch (address) {
-        0x0000...0x3FFF => rom.rom[address], // ROM bank 00
-        0x4000...0x7FFF => rom.rom[address], // ROM bank NN
+        0x0000...0x7FFF => current_mbc.read(address),
         0x8000...0x9FFF => ppu.vram[address - 0x8000], // Video RAM
-        0xA000...0xBFFF => external_ram[address - 0xA000], // External RAM
+        0xA000...0xBFFF => current_mbc.read(address),
         0xC000...0xCFFF => wram[0][address - 0xC000], // Work RAM
         0xD000...0xDFFF => wram[1][address - 0xD000], // Work RAM
         0xE000...0xFDFF => unreachable, // Echo RAM
         0xFE00...0xFE9F => ppu.oam[address - 0xFE00], // Object attribute memory
         0xFEA0...0xFEFF => unreachable, // Not Usable // TODO: Implement this
         0xFF00...0xFF7F => switch (address) { // I/O Ranges
-            0xff02 => unreachable, //TODO: FIX
+            0xFF02 => unreachable, //TODO: FIX
+            0xFF0F => @bitCast(interrupt_flag),
             0xFF10 => audio.NR10,
             0xFF11 => audio.NR11,
             0xFF12 => audio.NR12,
@@ -70,7 +80,8 @@ pub fn read1(address: u16, no_log: bool) u8 {
             0xFF27...0xFF2F => unreachable,
             0xFF40 => ppu.lcd_control,
             0xFF44 => ppu.ly,
-            else => unreachable,
+            0xFF4D => 0xFF, // CGB Only TODO: Default value?
+            else => std.debug.panic("Attempted to read address {x}", .{address}),
         },
         0xFF80...0xFFFE => high_ram[address - 0xFF80], // High RAM
         0xFFFF => @bitCast(interrupt_enable), // Interrupt Enable register
@@ -87,25 +98,24 @@ pub fn read16(address: u16) u16 {
 pub fn write(address: u16, value: u8) void {
     //std.log.debug("w 0x{x:0>4} = 0x{x:0>2}", .{ address, value });
     switch (address) {
-        0x0000...0x3FFF => undefined, // ROM bank 00
-        // TODO: Implement other MBC's, they will not be directly mapped like seen here
-        0x4000...0x7FFF => undefined, // ROM bank NN
+        0x0000...0x7FFF => current_mbc.write(address, value),
         0x8000...0x9FFF => ppu.vram[address - 0x8000] = value, // Video RAM
-        0xA000...0xBFFF => external_ram[address - 0xA000] = value, // External RAM
+        0xA000...0xBFFF => current_mbc.write(address, value),
         0xC000...0xCFFF => wram[0][address - 0xC000] = value, // Work RAM
         0xD000...0xDFFF => wram[1][address - 0xD000] = value, // Work RAM
         0xE000...0xFDFF => unreachable, // Echo RAM
         0xFE00...0xFE9F => ppu.oam[address - 0xFE00] = value, // Object attribute memory
-        0xFEA0...0xFEFF => unreachable, // Not Usable TODO: Does writing to this address do anything?
+        0xFEA0...0xFEFF => {}, // Not Usable TODO: Does writing to this address do anything?
         0xFF00...0xFF7F => switch (address) { // I/O Ranges
             0xFF00 => joypad = value, // Controller
             0xFF01 => {
                 // BLARG TEST OUTPUT
-                sb_buffer[sb_buffer_len] = value;
-                sb_buffer_len += 1;
+                _ = std.io.getStdOut().write(&.{value}) catch undefined;
+                //sb_buffer[sb_buffer_len] = value;
+                //sb_buffer_len += 1;
             }, // TODO: This
             0xFF02 => {
-                std.log.warn("{s}", .{sb_buffer[0..sb_buffer_len]});
+                //std.log.warn("{s}", .{sb_buffer[0..sb_buffer_len]});
             }, // TODO: This
             0xFF03 => unreachable,
             0xFF04 => div = value,
@@ -161,15 +171,15 @@ pub fn write(address: u16, value: u8) void {
             0xFF4A => ppu.wy = value,
             0xFF4B => ppu.wx = value,
             0xFF4C...0xFF4E => unreachable,
-            0xFF4F => undefined, // CGB
+            0xFF4F => {}, // CGB
             0xFF50 => unreachable, // TODO: implement this
-            0xFF51...0xFF55 => undefined, // CGB only
+            0xFF51...0xFF55 => {}, // CGB only
             0xFF56...0xFF67 => unreachable,
-            0xFF68...0xFF6B => undefined, // CGB Only
+            0xFF68...0xFF6B => {}, // CGB Only
             0xFF6C...0xFF6F => unreachable,
-            0xFF70 => undefined, // CGB Only
-            0xFF71...0xFF7F => unreachable,
-            else => unreachable,
+            0xFF70 => {}, // CGB Only
+            0xFF71...0xFF7F => {}, // CGB Only
+            else => std.debug.panic("Attempted to write address {x} with value {x}", .{ address, value }),
         },
         0xFF80...0xFFFE => high_ram[address - 0xFF80] = value, // High RAM
         0xFFFF => interrupt_enable = @bitCast(value), // Interrupt Enable register

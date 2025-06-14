@@ -38,23 +38,16 @@ pub fn set_flags(z: ?bool, n: ?bool, h: ?bool, c: ?bool) void {
     if (c) |v| registers.flags.c = v;
 }
 
-pub fn step(reader: std.fs.File.Reader) !u8 {
+const stdout = std.io.getStdOut();
+var buf = std.io.bufferedWriter(stdout.writer());
+const stdout_writer = buf.writer();
+pub fn step() !u8 {
     const cycles: u8 = 1; // TODO: Set a sane default
     const opcode = io.read(registers.u16.pc);
 
-    if (registers.u16.pc != 0x000) { // Debug
-        _ = reader;
-        //std.log.debug("A: {X:0>2} F: {X:0>2} B: {X:0>2} C: {X:0>2} D: {X:0>2} E: {X:0>2} H: {X:0>2} L: {X:0>2} SP: {X:0>4} PC: {X:0>2}:{X:0>4} ({X:0>2} {X:0>2} {X:0>2} {X:0>2})", .{ registers.u8.a, registers.u8.f, registers.u8.b, registers.u8.c, registers.u8.d, registers.u8.e, registers.u8.h, registers.u8.l, registers.u16.sp, 0x00, registers.u16.pc, io.read1(registers.u16.pc, true), io.read1(registers.u16.pc + 1, true), io.read1(registers.u16.pc + 2, true), io.read1(registers.u16.pc + 3, true) });
-        //var buffer: [83]u8 = undefined;
-        //var buffer2: [83]u8 = undefined;
-        //const size = try reader.readAll(&buffer);
-        //if (size < 83) @panic("EOF");
-        //_ = try std.fmt.bufPrint(&buffer2, "A: {X:0>2} F: {X:0>2} B: {X:0>2} C: {X:0>2} D: {X:0>2} E: {X:0>2} H: {X:0>2} L: {X:0>2} SP: {X:0>4} PC: {X:0>2}:{X:0>4} ({X:0>2} {X:0>2} {X:0>2} {X:0>2})\n", .{ registers.u8.a, registers.u8.f, registers.u8.b, registers.u8.c, registers.u8.d, registers.u8.e, registers.u8.h, registers.u8.l, registers.u16.sp, 0x00, registers.u16.pc, io.read1(registers.u16.pc, true), io.read1(registers.u16.pc + 1, true), io.read1(registers.u16.pc + 2, true), io.read1(registers.u16.pc + 3, true) });
-        //if (!std.mem.eql(u8, &buffer, &buffer2)) {
-        //    std.log.err("{s} was expected", .{buffer});
-        //    //@panic("Test failed");
-        //}
-    }
+    // A:00 F:11 B:22 C:33 D:44 E:55 H:66 L:77 SP:8888 PC:9999 PCMEM:AA,BB,CC,DD
+    //std.fmt.format(stdout_writer, "A:{X:0>2} F:{X:0>2} B:{X:0>2} C:{X:0>2} D:{X:0>2} E:{X:0>2} H:{X:0>2} L:{X:0>2} SP:{X:0>4} PC:{X:0>4} PCMEM:{X:0>2},{X:0>2},{X:0>2},{X:0>2}\n", .{ registers.u8.a, registers.u8.f, registers.u8.b, registers.u8.c, registers.u8.d, registers.u8.e, registers.u8.h, registers.u8.l, registers.u16.sp, registers.u16.pc, io.read1(registers.u16.pc, true), io.read1(registers.u16.pc + 1, true), io.read1(registers.u16.pc + 2, true), io.read1(registers.u16.pc + 3, true) }) catch undefined;
+
     registers.u16.pc += 1;
     switch (opcode) {
         // Block 0 //
@@ -107,11 +100,10 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
         // add hl, r16 - 00xx1001
         inline 0b00001001, 0b00011001, 0b00101001, 0b00111001 => |v| {
             const r16 = read_r16(v, 4);
-            const result, const carry = @addWithOverflow(registers.u16.hl, r16.get());
-            _, const half_carry = @addWithOverflow(@as(u12, @truncate(registers.u16.hl)), @as(u12, @truncate(r16.get())));
+            const result, const carry, const half_carry = math.add_with_carry(u16, registers.u16.hl, r16.get());
             registers.u16.hl = result;
 
-            set_flags(null, false, half_carry == 1, carry == 1);
+            set_flags(null, false, half_carry, carry);
         },
         //
         // inc r8 - 00xxx100
@@ -192,7 +184,7 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
         // cpl - 00101111
         inline 0b00101111 => {
             registers.u8.a = ~registers.u8.a;
-            set_flags(null, false, false, null);
+            set_flags(null, true, true, null);
         },
         // scf - 00110111
         inline 0b00110111 => {
@@ -235,6 +227,7 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
         inline 0b01000000...0b01110101, 0b01110111...0b01111111 => |v| {
             const source = read_r8(v, 0);
             const dest = read_r8(v, 3);
+            if (source == .d and dest == .d) @panic("EOF");
             dest.set(source.get());
         },
         //
@@ -246,32 +239,32 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
         // add a, r8 - 10000xxx
         inline 0b10000000...0b10000111 => |v| {
             const r8 = read_r8(v, 0);
-            const result, const carry = @addWithOverflow(registers.u8.a, r8.get());
-            _, const half_carry = @addWithOverflow(@as(u4, @truncate(registers.u8.a)), r8.get());
+            const result, const carry, const half_carry = math.add_with_carry(u8, registers.u8.a, r8.get());
             registers.u8.a = result;
-            set_flags(result == 0, false, half_carry == 1, carry == 1);
+            set_flags(result == 0, false, half_carry, carry);
         },
         // adc a, r8 - 10001xxx
         inline 0b10001000...0b10001111 => |v| {
             const r8 = read_r8(v, 0);
-            const result, const carry = @addWithOverflow(registers.u8.a, r8.get());
-            _, const half_carry = @addWithOverflow(@as(u4, @truncate(registers.u8.a)), r8.get());
-            set_flags(result == 0, false, half_carry == 1, carry == 1);
+            var result, const carry, const half_carry = math.add_with_carry(u8, r8.get(), @intFromBool(registers.flags.c));
+            result, const carry_2, const half_carry_2 = math.add_with_carry(u8, registers.u8.a, result);
+            registers.u8.a = result;
+            set_flags(result == 0, false, half_carry or half_carry_2, carry or carry_2);
         },
         // sub a, r8 - 10010xxx
         inline 0b10010000...0b10010111 => |v| {
             const r8 = read_r8(v, 0);
-            const result, const carry = @subWithOverflow(registers.u8.a, r8.get());
-            _, const half_carry = @subWithOverflow(registers.u8.a % 0x10, r8.get() % 0x10);
+            const result, const carry, const half_carry = math.sub_with_carry(u8, registers.u8.a, r8.get());
             registers.u8.a = result;
-            set_flags(result == 0, true, half_carry == 1, carry == 1);
+            set_flags(result == 0, true, half_carry, carry);
         },
         // sbc a, r8 - 10011xxx
         inline 0b10011000...0b10011111 => |v| {
             const r8 = read_r8(v, 0);
-            const result, const carry = @subWithOverflow(registers.u8.a, r8.get());
-            _, const half_carry = @subWithOverflow(registers.u8.a % 0x10, r8.get() % 0x10);
-            set_flags(result == 0, true, half_carry == 1, carry == 1);
+            var result, const carry, const half_carry = math.add_with_carry(u8, r8.get(), @intFromBool(registers.flags.c));
+            result, const carry_2, const half_carry_2 = math.sub_with_carry(u8, registers.u8.a, result);
+            registers.u8.a = result;
+            set_flags(result == 0, true, half_carry or half_carry_2, carry or carry_2);
         },
         // and a, r8 - 10100xxx
         inline 0b10100000...0b10100111 => |v| {
@@ -492,7 +485,7 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
                 const value, const carry = math.rotate(r8.get(), .left);
                 r8.set(value);
 
-                set_flags(false, false, false, carry);
+                set_flags(value == 0, false, false, carry);
             },
             // rrc r8 - 0b00001xxx
             inline 0b00001000...0b00001111 => |v| {
@@ -501,7 +494,7 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
                 const value, const carry = math.rotate(r8.get(), .right);
                 r8.set(value);
 
-                set_flags(false, false, false, carry);
+                set_flags(value == 0, false, false, carry);
             },
             // rl r8 - 0b00010xxx
             inline 0b00010000...0b00010111 => |v| {
@@ -534,7 +527,7 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
             inline 0b00101000...0b00101111 => |v| {
                 const r8 = read_r8(v, 0);
 
-                const value, const carry = math.shift(r8.get(), .left);
+                const value, const carry = math.shift_keep_bit(r8.get(), .right);
                 r8.set(value);
 
                 set_flags(value == 0, false, false, carry);
@@ -556,7 +549,7 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
                 const value, const carry = math.shift(r8.get(), .right);
                 r8.set(value);
 
-                set_flags(r8.get() == 0, false, false, carry);
+                set_flags(value == 0, false, false, carry);
             },
             //
             // bit b3, r8 - 01xxxyyy
@@ -582,12 +575,10 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
 
                 r8.set(r8.get() | (1 << b3));
             },
-            //else => |v| std.debug.panic("Unimplemented PREFIX OPCode 0x{x}", .{v}),
         },
 
         // invalid opcodes
         0xD3, 0xDB, 0xDD, 0xE3, 0xE4, 0xEB, 0xEC, 0xED, 0xF4, 0xFC, 0xFD => std.debug.panic("Invalid OPCode 0x{x}", .{opcode}),
-        //else => std.debug.panic("Unimplemented OPCode 0x{x}", .{opcode}),
     }
     registers.flags._ = 0;
     return cycles;
