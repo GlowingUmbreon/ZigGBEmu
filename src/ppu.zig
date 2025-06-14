@@ -10,7 +10,7 @@ pub const OAM = struct {
 
 pub var lcdc: u8 = undefined; //FF40 - LCD control
 pub var stat: u8 = undefined; // FF41 - LCD status
-pub var ly: u8 = 0; // FF44 - LCD Y coordinate [read-only]
+pub var ly: u8 = 0x90; // FF44 - LCD Y coordinate [read-only]
 pub var lyc: u8 = undefined; // FF45 - LY compare
 
 // To sort

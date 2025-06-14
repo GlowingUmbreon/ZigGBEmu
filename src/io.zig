@@ -27,8 +27,12 @@ var sb_buffer: [0x100]u8 = undefined;
 var sb_buffer_len: u32 = 0;
 
 pub fn read(address: u32) u8 {
+    return read1(address, false);
+}
+
+pub fn read1(address: u32, no_log: bool) u8 {
     //std.log.debug("r 0x{x:0>4}", .{address});
-    const value = switch (address) {
+    const value: u8 = switch (address) {
         0x0000...0x3FFF => rom.rom[address], // ROM bank 00
         0x4000...0x7FFF => rom.rom[address], // ROM bank NN
         0x8000...0x9FFF => ppu.vram[address - 0x8000], // Video RAM
@@ -69,10 +73,11 @@ pub fn read(address: u32) u8 {
             else => unreachable,
         },
         0xFF80...0xFFFE => high_ram[address - 0xFF80], // High RAM
-        0xFFFF => unreachable, // Interrupt Enable register
+        0xFFFF => @bitCast(interrupt_enable), // Interrupt Enable register
         else => unreachable,
     };
-    //std.log.debug("r 0x{x:0>4} = 0x{x:0>2}", .{ address, value });
+    _ = no_log;
+    //if (!no_log) std.log.debug("r 0x{x:0>4} = 0x{x:0>2}", .{ address, value });
     return value;
 }
 

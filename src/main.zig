@@ -10,14 +10,15 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    try rom.load_rom(allocator, "./tools/BlarggTestRoms/02-interrupts.gb");
+    try rom.load_rom(allocator, "./tools/BlarggTestRoms/04-op r,imm.gb");
 
     const cwd = std.fs.cwd();
     const test_file = try cwd.openFile("./tools/BlarggTestRomsLogs/EpicLog.txt", .{ .mode = .read_only });
     const reader = test_file.reader();
     while (true) {
         const cycles = try cpu.step(reader);
-        try ppu.step(cycles);
+        _ = cycles;
+        //try ppu.step(cycles);
 
         if (cpu.ime_enabled) {
             if (io.interrupt_enable.v_blank and io.interrupt_flag.v_blank) {
