@@ -20,7 +20,7 @@ Made for `zig 0.15.0-dev.79`, seems some higher versions break some bit shifts w
 | 01-special.gb            | ✅ pass |
 | 02-interrupts.gb         | ❎ fail |
 | 03-op sp,hl.gb           | ✅ pass |
-| 04-op r,imm.gb           |        |
+| 04-op r,imm.gb           | ✅ pass |
 | 05-op rp.gb              |        |
 | 06-ld r,r.gb             | ✅ pass |
 | 07-jr,jp,call,ret,rst.gb |        |

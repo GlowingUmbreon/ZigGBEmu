@@ -281,10 +281,8 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
         // cp a, r8 - 10111xxx
         inline 0b10111000...0b10111111 => |v| {
             const r8 = read_r8(v, 0);
-            const result, const carry = @subWithOverflow(registers.u8.a, r8.get());
-            _, const half_carry = @subWithOverflow(registers.u8.a % 0x10, r8.get() % 0x10);
-
-            set_flags(result == 0, true, half_carry == 1, carry == 1);
+            const result, const carry, const half_carry = sub_with_carry(u8, registers.u8.a, r8.get());
+            set_flags(result == 0, true, half_carry, carry);
         },
 
         // Block 3 //
@@ -292,18 +290,17 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
         // add a, imm8 - 11000110
         inline 0b11000110 => {
             const imm8 = read_imm8(true);
-            const result, const carry = @addWithOverflow(registers.u8.a, imm8);
-            _, const half_carry = @addWithOverflow(@as(u4, @truncate(registers.u8.a)), @as(u4, @truncate(imm8)));
+            const result, const carry, const half_carry = add_with_carry(u8, registers.u8.a, imm8);
             registers.u8.a = result;
-            set_flags(result == 0, false, half_carry == 1, carry == 1);
+            set_flags(result == 0, false, half_carry, carry);
         },
         // adc a, imm8 - 11001110
         inline 0b11001110 => {
-            const imm8 = read_imm8(true) +% @as(u1, @bitCast(registers.flags.c));
-            const result, const carry = @addWithOverflow(registers.u8.a, imm8);
-            _, const half_carry = @addWithOverflow(@as(u4, @truncate(registers.u8.a)), @as(u4, @truncate(imm8)));
+            const imm8 = read_imm8(true);
+            var result, const carry, const half_carry = add_with_carry(u8, imm8, @intFromBool(registers.flags.c));
+            result, const carry_2, const half_carry_2 = add_with_carry(u8, registers.u8.a, result);
             registers.u8.a = result;
-            set_flags(result == 0, false, half_carry == 1, carry == 1);
+            set_flags(result == 0, false, half_carry or half_carry_2, carry or carry_2);
         },
         // sub a, imm8
         inline 0b11010110 => {
@@ -313,7 +310,14 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
             registers.u8.a = result;
             set_flags(result == 0, true, half_carry == 1, carry == 1);
         },
-        // sbc a, imm8
+        // sbc a, imm8 - 11011110
+        inline 0b11011110 => {
+            const imm8 = read_imm8(true);
+            var result, const carry, const half_carry = add_with_carry(u8, imm8, @intFromBool(registers.flags.c));
+            result, const carry_2, const half_carry_2 = sub_with_carry(u8, registers.u8.a, result);
+            registers.u8.a = result;
+            set_flags(result == 0, true, half_carry or half_carry_2, carry or carry_2);
+        },
         // and a, imm8 - 11100110
         inline 0b11100110 => {
             const imm8 = read_imm8(true);
@@ -326,7 +330,12 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
             registers.u8.a ^= imm8;
             set_flags(registers.u8.a == 0, false, false, false);
         },
-        // or a, imm8
+        // or a, imm8 - 11110110
+        inline 0b11110110 => {
+            const imm8 = read_imm8(true);
+            registers.u8.a |= imm8;
+            set_flags(registers.u8.a == 0, false, false, false);
+        },
         // cp a, imm8 - 11111110
         inline 0b11111110 => {
             const imm8 = read_imm8(true);
@@ -416,33 +425,21 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
         inline 0b11101000 => {
             const imm8_u = read_imm8(true);
             const imm8: i8 = @bitCast(imm8_u);
-            var result: u16, var carry: u1, var half_carry: u1 = .{ 0, 0, 0 };
 
-            if (imm8 < 0) {
-                result, _ = @subWithOverflow(registers.u16.sp, @abs(imm8));
-            } else {
-                result, _ = @addWithOverflow(registers.u16.sp, @abs(imm8));
-            }
-            _, carry = @addWithOverflow(@as(u8, @truncate(registers.u16.sp)), imm8_u);
-            _, half_carry = @addWithOverflow(@as(u4, @truncate(registers.u16.sp)), @as(u4, @truncate(imm8_u)));
+            const result, _ = if (imm8 < 0) @subWithOverflow(registers.u16.sp, @abs(imm8)) else @addWithOverflow(registers.u16.sp, @abs(imm8));
+            _, const carry, const half_carry = add_with_carry(u8, registers.u16.sp, imm8_u);
             registers.u16.sp = result;
-            set_flags(false, false, half_carry == 1, carry == 1);
+            set_flags(false, false, half_carry, carry);
         },
         // ld hl, sp + imm8 - 11111000
         inline 0b11111000 => {
             const imm8_u = read_imm8(true);
             const imm8: i8 = @bitCast(imm8_u);
-            var result: u16, var carry: u1, var half_carry: u1 = .{ 0, 0, 0 };
 
-            if (imm8 < 0) {
-                result, _ = @subWithOverflow(registers.u16.sp, @abs(imm8));
-            } else {
-                result, _ = @addWithOverflow(registers.u16.sp, @abs(imm8));
-            }
-            _, carry = @addWithOverflow(@as(u8, @truncate(registers.u16.sp)), imm8_u);
-            _, half_carry = @addWithOverflow(@as(u4, @truncate(registers.u16.sp)), @as(u4, @truncate(imm8_u)));
+            const result, _ = if (imm8 < 0) @subWithOverflow(registers.u16.sp, @abs(imm8)) else @addWithOverflow(registers.u16.sp, @abs(imm8));
+            _, const carry, const half_carry = add_with_carry(u8, registers.u16.sp, imm8_u);
             registers.u16.hl = result;
-            set_flags(false, false, half_carry == 1, carry == 1);
+            set_flags(false, false, half_carry, carry);
         },
         // ld sp, hl
         inline 0b11111001 => {
@@ -522,6 +519,32 @@ pub fn step(reader: std.fs.File.Reader) !u8 {
     }
     registers.flags._ = 0;
     return cycles;
+}
+
+pub fn cast_int(comptime int_type: type, number: anytype) int_type {
+    if (@TypeOf(number) == int_type) {
+        return number;
+    } else if (@typeInfo(int_type).int.bits < @typeInfo(@TypeOf(number)).int.bits) {
+        return @truncate(number);
+    } else {
+        return @intCast(number);
+    }
+}
+pub fn add_with_carry(comptime main_type: type, number1: anytype, number2: anytype) struct { main_type, bool, bool } {
+    const half_type = @Type(.{ .int = .{ .bits = (@typeInfo(main_type).int.bits - 4), .signedness = .unsigned } });
+
+    const result, const carry = @addWithOverflow(cast_int(main_type, number1), cast_int(main_type, number2));
+    _, const half_carry = @addWithOverflow(cast_int(half_type, number1), cast_int(half_type, number2));
+
+    return .{ result, carry == 1, half_carry == 1 };
+}
+pub fn sub_with_carry(comptime main_type: type, number1: anytype, number2: anytype) struct { main_type, bool, bool } {
+    const half_type = @Type(.{ .int = .{ .bits = (@typeInfo(main_type).int.bits - 4), .signedness = .unsigned } });
+
+    const result, const carry = @subWithOverflow(cast_int(main_type, number1), cast_int(main_type, number2));
+    _, const half_carry = @subWithOverflow(cast_int(half_type, number1), cast_int(half_type, number2));
+
+    return .{ result, carry == 1, half_carry == 1 };
 }
 
 // Carry maths
