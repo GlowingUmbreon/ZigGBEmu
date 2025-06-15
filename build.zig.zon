@@ -2,7 +2,7 @@
     .name = .ZigGBEmu,
     .version = "0.0.0",
     .fingerprint = 0xf7b8cd2e0d103591,
-    .minimum_zig_version = "0.15.0-dev.79+9f235a105",
+    .minimum_zig_version = "0.15.0-dev.828+3ce8d19f7",
     .dependencies = .{},
     .paths = .{
         "build.zig",

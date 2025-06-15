@@ -49,7 +49,7 @@ pub fn read1(address: u16, no_log: bool) u8 {
         0xC000...0xCFFF => wram[0][address - 0xC000], // Work RAM
         0xD000...0xDFFF => wram[1][address - 0xD000], // Work RAM
         0xE000...0xFDFF => unreachable, // Echo RAM
-        0xFE00...0xFE9F => ppu.oam[address - 0xFE00], // Object attribute memory
+        0xFE00...0xFE9F => ppu.oam.u8[address - 0xFE00], // Object attribute memory
         0xFEA0...0xFEFF => unreachable, // Not Usable // TODO: Implement this
         0xFF00...0xFF7F => switch (address) { // I/O Ranges
             0xFF02 => unreachable, //TODO: FIX
@@ -78,7 +78,7 @@ pub fn read1(address: u16, no_log: bool) u8 {
             0xFF25 => audio.NR51,
             0xFF26 => audio.NR52,
             0xFF27...0xFF2F => unreachable,
-            0xFF40 => ppu.lcd_control,
+            0xFF40 => @bitCast(ppu.lcdc),
             0xFF44 => ppu.ly,
             0xFF4D => 0xFF, // CGB Only TODO: Default value?
             else => std.debug.panic("Attempted to read address {x}", .{address}),
@@ -104,13 +104,13 @@ pub fn write(address: u16, value: u8) void {
         0xC000...0xCFFF => wram[0][address - 0xC000] = value, // Work RAM
         0xD000...0xDFFF => wram[1][address - 0xD000] = value, // Work RAM
         0xE000...0xFDFF => unreachable, // Echo RAM
-        0xFE00...0xFE9F => ppu.oam[address - 0xFE00] = value, // Object attribute memory
+        0xFE00...0xFE9F => ppu.oam.u8[address - 0xFE00] = value, // Object attribute memory
         0xFEA0...0xFEFF => {}, // Not Usable TODO: Does writing to this address do anything?
         0xFF00...0xFF7F => switch (address) { // I/O Ranges
             0xFF00 => joypad = value, // Controller
             0xFF01 => {
                 // BLARG TEST OUTPUT
-                _ = std.io.getStdOut().write(&.{value}) catch undefined;
+                //_ = std.io.getStdOut().write(&.{value}) catch undefined;
                 //sb_buffer[sb_buffer_len] = value;
                 //sb_buffer_len += 1;
             }, // TODO: This
@@ -153,7 +153,7 @@ pub fn write(address: u16, value: u8) void {
             0xFF30...0xFF3F => unreachable, // TODO: implement this
 
             // Graphics
-            0xFF40 => ppu.lcd_control = @bitCast(value),
+            0xFF40 => ppu.lcdc = @bitCast(value),
             0xFF41 => ppu.stat = @bitCast(value),
             0xFF42 => ppu.scy = value,
             0xFF43 => ppu.scx = value,
@@ -162,12 +162,12 @@ pub fn write(address: u16, value: u8) void {
             0xFF46 => {
                 const source = @as(u16, @intCast(value)) * 0x100;
                 for (0..0x9F) |offset| {
-                    ppu.oam[offset] = read(source + @as(u16, @intCast(offset)));
+                    ppu.oam.u8[offset] = read(source + @as(u16, @intCast(offset)));
                 }
             },
-            0xFF47 => ppu.bg_palette_data = value,
-            0xFF48 => ppu.obj0_palette_data = value,
-            0xFF49 => ppu.obj1_palette_data = value,
+            0xFF47 => ppu.bgp = value,
+            0xFF48 => ppu.obp0 = value,
+            0xFF49 => ppu.obp1 = value,
             0xFF4A => ppu.wy = value,
             0xFF4B => ppu.wx = value,
             0xFF4C...0xFF4E => unreachable,

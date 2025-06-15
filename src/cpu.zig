@@ -45,8 +45,7 @@ pub fn step() !u8 {
     const cycles: u8 = 1; // TODO: Set a sane default
     const opcode = io.read(registers.u16.pc);
 
-    // A:00 F:11 B:22 C:33 D:44 E:55 H:66 L:77 SP:8888 PC:9999 PCMEM:AA,BB,CC,DD
-    //std.fmt.format(stdout_writer, "A:{X:0>2} F:{X:0>2} B:{X:0>2} C:{X:0>2} D:{X:0>2} E:{X:0>2} H:{X:0>2} L:{X:0>2} SP:{X:0>4} PC:{X:0>4} PCMEM:{X:0>2},{X:0>2},{X:0>2},{X:0>2}\n", .{ registers.u8.a, registers.u8.f, registers.u8.b, registers.u8.c, registers.u8.d, registers.u8.e, registers.u8.h, registers.u8.l, registers.u16.sp, registers.u16.pc, io.read1(registers.u16.pc, true), io.read1(registers.u16.pc + 1, true), io.read1(registers.u16.pc + 2, true), io.read1(registers.u16.pc + 3, true) }) catch undefined;
+    std.fmt.format(stdout_writer, "A:{X:0>2} F:{X:0>2} B:{X:0>2} C:{X:0>2} D:{X:0>2} E:{X:0>2} H:{X:0>2} L:{X:0>2} SP:{X:0>4} PC:{X:0>4} PCMEM:{X:0>2},{X:0>2},{X:0>2},{X:0>2}\n", .{ registers.u8.a, registers.u8.f, registers.u8.b, registers.u8.c, registers.u8.d, registers.u8.e, registers.u8.h, registers.u8.l, registers.u16.sp, registers.u16.pc, io.read1(registers.u16.pc, true), io.read1(registers.u16.pc + 1, true), io.read1(registers.u16.pc + 2, true), io.read1(registers.u16.pc + 3, true) }) catch undefined;
 
     registers.u16.pc += 1;
     switch (opcode) {
@@ -227,7 +226,6 @@ pub fn step() !u8 {
         inline 0b01000000...0b01110101, 0b01110111...0b01111111 => |v| {
             const source = read_r8(v, 0);
             const dest = read_r8(v, 3);
-            if (source == .d and dest == .d) @panic("EOF");
             dest.set(source.get());
         },
         //

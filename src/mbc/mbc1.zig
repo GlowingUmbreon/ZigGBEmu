@@ -9,10 +9,9 @@ pub const mbc = io.MBC{
 };
 
 pub fn write(address: u16, value: u8) void {
-    _ = value;
     switch (address) {
         0x0000...0x1FFF => unreachable,
-        0x2000...0x3FFF => unreachable,
+        0x2000...0x3FFF => ram_bank_number = value,
         0x4000...0x5FFF => unreachable,
         0x6000...0x7FFF => unreachable,
         else => unreachable,
