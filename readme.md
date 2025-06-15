@@ -5,7 +5,7 @@ Made for `zig 0.15.0-dev.79`, seems some higher versions break some bit shifts w
 [GBDev - SM83 instruction set](https://gbdev.io/gb-opcodes/optables/)  
 [RGBDS - opcode reference](https://rgbds.gbdev.io/docs/v0.9.2/gbz80.7)  
 [Gekkio - Game Boy: Complete Technical Reference](https://gekkio.fi/files/gb-docs/gbctr.pdf)  
-[wheremyfoodat - Gameboy logs](https://github.com/wheremyfoodat/Gameboy-logs)  
+[robert - Gameboy doctor](https://github.com/robert/gameboy-doctor)  
 [Blargg - test roms](https://github.com/L-P/blargg-test-roms/)
 
 # Status

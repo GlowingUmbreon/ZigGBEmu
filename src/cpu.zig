@@ -4,25 +4,9 @@ const math = @import("cpu_maths.zig");
 
 pub var ime_enabled = false;
 pub var registers: packed union {
-    u16: packed struct { // Double
-        af: u16 = 0x01B0,
-        bc: u16 = 0x0013,
-        de: u16 = 0x00d8,
-        hl: u16 = 0x014D,
-        sp: u16 = 0xFFFE,
-        pc: u16 = 0x0100,
-    },
-    u8: packed struct { // Single
-        f: u8,
-        a: u8,
-        c: u8,
-        b: u8,
-        e: u8,
-        d: u8,
-        l: u8,
-        h: u8,
-    },
-    flags: packed struct { // Flags
+    u16: packed struct { af: u16 = 0x01B0, bc: u16 = 0x0013, de: u16 = 0x00d8, hl: u16 = 0x014D, sp: u16 = 0xFFFE, pc: u16 = 0x0100 },
+    u8: packed struct { f: u8, a: u8, c: u8, b: u8, e: u8, d: u8, l: u8, h: u8 },
+    flags: packed struct {
         _: u4, // Always 0
         c: bool, // Carry
         h: bool, // Half-Carry
@@ -45,7 +29,7 @@ pub fn step() !u8 {
     const cycles: u8 = 1; // TODO: Set a sane default
     const opcode = io.read(registers.u16.pc);
 
-    std.fmt.format(stdout_writer, "A:{X:0>2} F:{X:0>2} B:{X:0>2} C:{X:0>2} D:{X:0>2} E:{X:0>2} H:{X:0>2} L:{X:0>2} SP:{X:0>4} PC:{X:0>4} PCMEM:{X:0>2},{X:0>2},{X:0>2},{X:0>2}\n", .{ registers.u8.a, registers.u8.f, registers.u8.b, registers.u8.c, registers.u8.d, registers.u8.e, registers.u8.h, registers.u8.l, registers.u16.sp, registers.u16.pc, io.read1(registers.u16.pc, true), io.read1(registers.u16.pc + 1, true), io.read1(registers.u16.pc + 2, true), io.read1(registers.u16.pc + 3, true) }) catch undefined;
+    //std.fmt.format(stdout_writer, "A:{X:0>2} F:{X:0>2} B:{X:0>2} C:{X:0>2} D:{X:0>2} E:{X:0>2} H:{X:0>2} L:{X:0>2} SP:{X:0>4} PC:{X:0>4} PCMEM:{X:0>2},{X:0>2},{X:0>2},{X:0>2}\n", .{ registers.u8.a, registers.u8.f, registers.u8.b, registers.u8.c, registers.u8.d, registers.u8.e, registers.u8.h, registers.u8.l, registers.u16.sp, registers.u16.pc, io.read1(registers.u16.pc, true), io.read1(registers.u16.pc + 1, true), io.read1(registers.u16.pc + 2, true), io.read1(registers.u16.pc + 3, true) }) catch undefined;
 
     registers.u16.pc += 1;
     switch (opcode) {
@@ -53,47 +37,41 @@ pub fn step() !u8 {
 
         // nop - 00000000
         inline 0x00 => {
-            @setEvalBranchQuota(2048);
+            @setEvalBranchQuota(2048); // This is needed due to how large this switch block is.
         },
         //
         //ld r16, imm16 - 00xx0001
         inline 0b00000001, 0b00010001, 0b00100001, 0b00110001 => |v| {
             const r16 = read_r16(v, 4);
             const imm16: u16 = read_imm16(true);
-
             r16.set(imm16);
         },
         // ld [r16mem], a - 00xx0010
         inline 0b00000010, 0b00010010, 0b00100010, 0b00110010 => |v| {
             const r16 = read_r16_mem(v, 4);
-
             io.write(r16.get(), registers.u8.a);
             r16.increment();
         },
         // ld a, [r16mem] - 00xx1010
         inline 0b00001010, 0b00011010, 0b00101010, 0b00111010 => |v| {
             const r16 = read_r16_mem(v, 4);
-
             registers.u8.a = io.read(r16.get());
             r16.increment();
         },
         // ld [imm16], sp - 00001000
         inline 0b00001000 => {
             const imm16 = read_imm16(true);
-
             io.write_16(imm16, registers.u16.sp);
         },
         //
         // inc r16 - 00xx0011
         inline 0b00000011, 0b00010011, 0b00100011, 0b00110011 => |v| {
             const r16 = read_r16(v, 4);
-
             r16.set(r16.get() +% 1);
         },
         // dec r16 - 00xx1011
         inline 0b00001011, 0b00011011, 0b00101011, 0b00111011 => |v| {
             const r16 = read_r16(v, 4);
-
             r16.set(r16.get() -% 1);
         },
         // add hl, r16 - 00xx1001
@@ -101,28 +79,23 @@ pub fn step() !u8 {
             const r16 = read_r16(v, 4);
             const result, const carry, const half_carry = math.add_with_carry(u16, registers.u16.hl, r16.get());
             registers.u16.hl = result;
-
             set_flags(null, false, half_carry, carry);
         },
         //
         // inc r8 - 00xxx100
         inline 0b00000100, 0b00001100, 0b00010100, 0b00011100, 0b00100100, 0b00101100, 0b00110100, 0b00111100 => |v| {
             const r8 = read_r8(v, 3);
-
             const result = r8.get() +% 1;
             _, const half_carry = @addWithOverflow(@as(u4, @truncate(r8.get())), 1);
             r8.set(result);
-
             set_flags(result == 0, false, half_carry == 1, null);
         },
         // dec r8 - 00xxx101
         inline 0b00000101, 0b00001101, 0b00010101, 0b00011101, 0b00100101, 0b00101101, 0b00110101, 0b00111101 => |v| {
             const r8 = read_r8(v, 3);
-
             const result = r8.get() -% 1;
             _, const half_carry = @subWithOverflow(@as(u4, @truncate(r8.get())), 1);
             r8.set(result);
-
             set_flags(r8.get() == 0, true, half_carry == 1, null);
         },
         //
@@ -138,28 +111,24 @@ pub fn step() !u8 {
         inline 0b00000111 => {
             const value, const carry = math.rotate(registers.u8.a, .left);
             registers.u8.a = value;
-
             set_flags(false, false, false, carry);
         },
         // rrca - 00001111
         inline 0b00001111 => {
             const value, const carry = math.rotate(registers.u8.a, .right);
             registers.u8.a = value;
-
             set_flags(false, false, false, carry);
         },
         // rla - 00010111
         inline 0b00010111 => {
             const value, const carry = math.rotate_through(registers.u8.a, registers.flags.c, .left);
             registers.u8.a = value;
-
             set_flags(false, false, false, carry);
         },
         // rra - 00011111
         inline 0b00011111 => {
             const value, const carry = math.rotate_through(registers.u8.a, registers.flags.c, .right);
             registers.u8.a = value;
-
             set_flags(false, false, false, carry);
         },
         // daa - 00100111
@@ -207,7 +176,6 @@ pub fn step() !u8 {
         inline 0b00100000, 0b00101000, 0b00110000, 0b00111000 => |v| {
             const cond = read_condition(v, 3);
             const imm8: i8 = @bitCast(read_imm8(true));
-
             if (cond.check()) {
                 if (imm8 > 0) {
                     registers.u16.pc +%= @intCast(imm8);
@@ -395,7 +363,6 @@ pub fn step() !u8 {
         // rst tgt3 - 11xxx111
         inline 0b11000111, 0b11001111, 0b11010111, 0b11011111, 0b11100111, 0b11101111, 0b11110111, 0b11111111 => |v| {
             const tgt3 = read_u(v, 3, u3);
-
             push_stack16(registers.u16.pc);
             registers.u16.pc = @as(u16, tgt3) * 8;
         },
@@ -445,7 +412,6 @@ pub fn step() !u8 {
         inline 0b11101000 => {
             const imm8_u = read_imm8(true);
             const imm8: i8 = @bitCast(imm8_u);
-
             const result, _ = if (imm8 < 0) @subWithOverflow(registers.u16.sp, @abs(imm8)) else @addWithOverflow(registers.u16.sp, @abs(imm8));
             _, const carry, const half_carry = math.add_with_carry(u8, registers.u16.sp, imm8_u);
             registers.u16.sp = result;
@@ -455,7 +421,6 @@ pub fn step() !u8 {
         inline 0b11111000 => {
             const imm8_u = read_imm8(true);
             const imm8: i8 = @bitCast(imm8_u);
-
             const result, _ = if (imm8 < 0) @subWithOverflow(registers.u16.sp, @abs(imm8)) else @addWithOverflow(registers.u16.sp, @abs(imm8));
             _, const carry, const half_carry = math.add_with_carry(u8, registers.u16.sp, imm8_u);
             registers.u16.hl = result;
@@ -479,74 +444,58 @@ pub fn step() !u8 {
             // rlc r8 - 00000xxx
             inline 0b00000000...0b00000111 => |v| {
                 const r8 = read_r8(v, 0);
-
                 const value, const carry = math.rotate(r8.get(), .left);
                 r8.set(value);
-
                 set_flags(value == 0, false, false, carry);
             },
             // rrc r8 - 0b00001xxx
             inline 0b00001000...0b00001111 => |v| {
                 const r8 = read_r8(v, 0);
-
                 const value, const carry = math.rotate(r8.get(), .right);
                 r8.set(value);
-
                 set_flags(value == 0, false, false, carry);
             },
             // rl r8 - 0b00010xxx
             inline 0b00010000...0b00010111 => |v| {
                 const r8 = read_r8(v, 0);
-
                 const value, const carry = math.rotate_through(r8.get(), registers.flags.c, .left);
                 r8.set(value);
-
                 set_flags(value == 0, false, false, carry);
             },
             // rr r8 - 00011xxx
             inline 0b00011000...0b00011111 => |v| {
                 const r8 = read_r8(v, 0);
-
                 const value, const carry = math.rotate_through(r8.get(), registers.flags.c, .right);
                 r8.set(value);
-
                 set_flags(value == 0, false, false, carry);
             },
             // sla r8 - 00100xxx
             inline 0b00100000...0b00100111 => |v| {
                 const r8 = read_r8(v, 0);
-
                 const value, const carry = math.shift(r8.get(), .left);
                 r8.set(value);
-
                 set_flags(value == 0, false, false, carry);
             },
             // sra r8 - 0b00101xxx
             inline 0b00101000...0b00101111 => |v| {
                 const r8 = read_r8(v, 0);
-
                 const value, const carry = math.shift_keep_bit(r8.get(), .right);
                 r8.set(value);
-
                 set_flags(value == 0, false, false, carry);
             },
             // swap r8 - 00110xxx
             inline 0b00110000...0b00110111 => |v| {
                 const r8 = read_r8(v, 0);
-
                 const value = r8.get();
                 const result = (value << 4) | (value >> 4);
                 r8.set(result);
-
                 set_flags(result == 0, false, false, false);
             },
             // srl r8 - 00111xxx
             inline 0b00111000...0b00111111 => |v| {
                 const r8 = read_r8(v, 0);
-
                 const value, const carry = math.shift(r8.get(), .right);
                 r8.set(value);
-
                 set_flags(value == 0, false, false, carry);
             },
             //
@@ -554,23 +503,19 @@ pub fn step() !u8 {
             inline 0b01000000...0b01111111 => |v| {
                 const b3 = read_u(v, 3, u3);
                 const r8 = read_r8(v, 0);
-
                 const z = r8.get() & (1 << b3);
-
                 set_flags(z == 0, false, true, null);
             },
             // res b3, r8 - 10xxxyyy
             inline 0b10000000...0b10111111 => |v| {
                 const b3 = read_u(v, 3, u3);
                 const r8 = read_r8(v, 0);
-
                 r8.set(r8.get() ^ (r8.get() & (1 << b3)));
             },
             // set b3, r8 - 11xxxyyy
             inline 0b11000000...0b11111111 => |v| {
                 const b3 = read_u(v, 3, u3);
                 const r8 = read_r8(v, 0);
-
                 r8.set(r8.get() | (1 << b3));
             },
         },
